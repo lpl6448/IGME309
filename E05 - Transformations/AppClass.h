@@ -20,7 +20,6 @@ using namespace BTX;
 
 class Application
 {
-	uint m_uMeshCount = 10;
 	MyMesh* m_pMesh;
 private:
 	String m_sProgrammer = "Alberto Bobadilla - labigm@rit.edu";
