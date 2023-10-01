@@ -60,9 +60,20 @@ void MyMesh::GenerateCone(float a_fRadius, float a_fHeight, int a_nSubdivisions,
 	Release();
 	Init();
 
-	// Replace this with your code
-	GenerateCube(a_fRadius * 2.0f, a_v3Color);
-	// -------------------------------
+	// Cone generation code
+	vector3 baseCenter = vector3(0, -a_fHeight / 2, 0);
+	vector3 conePoint = vector3(0, a_fHeight / 2, 0);
+	float radianIncrement = glm::pi<float>() * 2 / a_nSubdivisions;
+	for (int i = 0; i < a_nSubdivisions; i++)
+	{
+		float radianStart = radianIncrement * i;
+		float radianEnd = radianIncrement * (i + 1);
+
+		vector3 baseStart = baseCenter + vector3(glm::cos(radianStart), 0, glm::sin(radianStart)) * a_fRadius;
+		vector3 baseEnd = baseCenter + vector3(glm::cos(radianEnd), 0, glm::sin(radianEnd)) * a_fRadius;
+		AddTri(baseCenter, baseStart, baseEnd);
+		AddTri(conePoint, baseEnd, baseStart);
+	}
 
 	// Adding information about color
 	CompleteMesh(a_v3Color);
@@ -84,9 +95,23 @@ void MyMesh::GenerateCylinder(float a_fRadius, float a_fHeight, int a_nSubdivisi
 	Release();
 	Init();
 
-	// Replace this with your code
-	GenerateCube(a_fRadius * 2.0f, a_v3Color);
-	// -------------------------------
+	// Cylinder generation code
+	vector3 lowerBaseCenter = vector3(0, -a_fHeight / 2, 0);
+	vector3 upperBaseCenter = vector3(0, a_fHeight / 2, 0);
+	float radianIncrement = glm::pi<float>() * 2 / a_nSubdivisions;
+	for (int i = 0; i < a_nSubdivisions; i++)
+	{
+		float radianStart = radianIncrement * i;
+		float radianEnd = radianIncrement * (i + 1);
+
+		vector3 lowerBaseStart = lowerBaseCenter + vector3(glm::cos(radianStart), 0, glm::sin(radianStart)) * a_fRadius;
+		vector3 lowerBaseEnd = lowerBaseCenter + vector3(glm::cos(radianEnd), 0, glm::sin(radianEnd)) * a_fRadius;
+		vector3 upperBaseStart = upperBaseCenter + vector3(glm::cos(radianStart), 0, glm::sin(radianStart)) * a_fRadius;
+		vector3 upperBaseEnd = upperBaseCenter + vector3(glm::cos(radianEnd), 0, glm::sin(radianEnd)) * a_fRadius;
+		AddTri(lowerBaseCenter, lowerBaseStart, lowerBaseEnd);
+		AddTri(upperBaseCenter, upperBaseEnd, upperBaseStart);
+		AddQuad(lowerBaseEnd, lowerBaseStart, upperBaseEnd, upperBaseStart);
+	}
 
 	// Adding information about color
 	CompleteMesh(a_v3Color);
@@ -114,9 +139,27 @@ void MyMesh::GenerateTube(float a_fOuterRadius, float a_fInnerRadius, float a_fH
 	Release();
 	Init();
 
-	// Replace this with your code
-	GenerateCube(a_fOuterRadius * 2.0f, a_v3Color);
-	// -------------------------------
+	// Tube generation code
+	vector3 lowerBase = vector3(0, -a_fHeight / 2, 0);
+	vector3 upperBase = vector3(0, a_fHeight / 2, 0);
+	float radianIncrement = glm::pi<float>() * 2 / a_nSubdivisions;
+	for (int i = 0; i < a_nSubdivisions; i++)
+	{
+		float radianStart = radianIncrement * i;
+		float radianEnd = radianIncrement * (i + 1);
+
+		vector3 startDir = vector3(glm::cos(radianStart), 0, glm::sin(radianStart));
+		vector3 endDir = vector3(glm::cos(radianEnd), 0, glm::sin(radianEnd));
+
+		AddQuad(lowerBase + startDir * a_fInnerRadius, lowerBase + endDir * a_fInnerRadius,
+			upperBase + startDir * a_fInnerRadius, upperBase + endDir * a_fInnerRadius);
+		AddQuad(lowerBase + endDir * a_fOuterRadius, lowerBase + startDir * a_fOuterRadius,
+			upperBase + endDir * a_fOuterRadius, upperBase + startDir * a_fOuterRadius);
+		AddQuad(lowerBase + endDir * a_fInnerRadius, lowerBase + startDir * a_fInnerRadius,
+			lowerBase + endDir * a_fOuterRadius, lowerBase + startDir * a_fOuterRadius);
+		AddQuad(upperBase + startDir * a_fInnerRadius, upperBase + endDir * a_fInnerRadius,
+			upperBase + startDir * a_fOuterRadius, upperBase + endDir * a_fOuterRadius);
+	}
 
 	// Adding information about color
 	CompleteMesh(a_v3Color);
@@ -146,9 +189,32 @@ void MyMesh::GenerateTorus(float a_fOuterRadius, float a_fInnerRadius, int a_nSu
 	Release();
 	Init();
 
-	// Replace this with your code
-	GenerateCube(a_fOuterRadius * 2.0f, a_v3Color);
-	// -------------------------------
+	// Torus generation code
+	float majorRadius = (a_fOuterRadius + a_fInnerRadius) / 2;
+	float minorRadius = (a_fOuterRadius - a_fInnerRadius) / 2;
+	float radianIncrementA = glm::pi<float>() * 2 / a_nSubdivisionsA;
+	float radianIncrementB = glm::pi<float>() * 2 / a_nSubdivisionsB;
+	for (int revIndex = 0; revIndex < a_nSubdivisionsA; revIndex++)
+	{
+		float radianStartA = radianIncrementA * revIndex;
+		float radianEndA = radianIncrementA * (revIndex + 1);
+		vector3 startDir = vector3(glm::cos(radianStartA), 0, glm::sin(radianStartA));
+		vector3 endDir = vector3(glm::cos(radianEndA), 0, glm::sin(radianEndA));
+		vector3 upDir = vector3(0, 1, 0);
+
+		for (int tubeIndex = 0; tubeIndex < a_nSubdivisionsB; tubeIndex++)
+		{
+			float radianStartB = radianIncrementB * tubeIndex;
+			float radianEndB = radianIncrementB * (tubeIndex + 1);
+			vector2 circleStart = vector2(glm::cos(radianStartB), glm::sin(radianStartB)) * minorRadius;
+			vector2 circleEnd = vector2(glm::cos(radianEndB), glm::sin(radianEndB)) * minorRadius;
+
+			AddQuad(endDir * (majorRadius + circleStart.x) + upDir * circleStart.y,
+				startDir * (majorRadius + circleStart.x) + upDir * circleStart.y,
+				endDir * (majorRadius + circleEnd.x) + upDir * circleEnd.y,
+				startDir * (majorRadius + circleEnd.x) + upDir * circleEnd.y);
+		}
+	}
 
 	// Adding information about color
 	CompleteMesh(a_v3Color);
@@ -171,9 +237,41 @@ void MyMesh::GenerateSphere(float a_fRadius, int a_nSubdivisions, vector3 a_v3Co
 	Release();
 	Init();
 
-	// Replace this with your code
-	GenerateCube(a_fRadius * 2.0f, a_v3Color);
-	// -------------------------------
+	// Latitude longitude sphere generation code
+	float lonIncrement = glm::pi<float>() * 2 / a_nSubdivisions;
+	float latIncrement = glm::pi<float>() / a_nSubdivisions;
+	for (int lonIndex = 0; lonIndex < a_nSubdivisions; lonIndex++)
+	{
+		float lonStart = lonIncrement * lonIndex;
+		float lonEnd = lonIncrement * (lonIndex + 1);
+		vector3 lonStartDir = vector3(glm::cos(lonStart), 0, glm::sin(lonStart));
+		vector3 lonEndDir = vector3(glm::cos(lonEnd), 0, glm::sin(lonEnd));
+		vector3 upDir = vector3(0, 1, 0);
+
+		for (int latIndex = 0; latIndex < a_nSubdivisions; latIndex++)
+		{
+			float latStart = latIncrement * latIndex - glm::pi<float>() / 2;
+			float latEnd = latIncrement * (latIndex + 1) - glm::pi<float>() / 2;
+			vector2 circleStart = vector2(glm::cos(latStart), glm::sin(latStart)) * a_fRadius;
+			vector2 circleEnd = vector2(glm::cos(latEnd), glm::sin(latEnd)) * a_fRadius;
+
+			// When working with the first or last subdivisions, circleStart.x == circleEnd.x == 0
+			// so drawing a quad would result in two triangles on top of each other. Therefore, we only need to draw a single triangle in these cases.
+			if (latIndex == 0)
+				AddTri(lonStartDir * circleStart.x + upDir * circleStart.y,
+					lonStartDir * circleEnd.x + upDir * circleEnd.y,
+					lonEndDir * circleEnd.x + upDir * circleEnd.y);
+			else if (latIndex == a_nSubdivisions - 1)
+				AddTri(lonEndDir * circleStart.x + upDir * circleStart.y,
+					lonStartDir * circleStart.x + upDir * circleStart.y,
+					lonEndDir * circleEnd.x + upDir * circleEnd.y);
+			else
+				AddQuad(lonEndDir * circleStart.x + upDir * circleStart.y,
+					lonStartDir * circleStart.x + upDir * circleStart.y,
+					lonEndDir * circleEnd.x + upDir * circleEnd.y,
+					lonStartDir * circleEnd.x + upDir * circleEnd.y);
+		}
+	}
 
 	// Adding information about color
 	CompleteMesh(a_v3Color);
@@ -325,7 +423,7 @@ void MyMesh::Render(matrix4 a_mProjection, matrix4 a_mView, matrix4 a_mModel)
 {
 	// Use the buffer and shader
 	GLuint nShader = m_pShaderMngr->GetShaderID("Basic");
-	glUseProgram(nShader); 
+	glUseProgram(nShader);
 
 	//Bind the VAO of this object
 	glBindVertexArray(m_VAO);
@@ -337,11 +435,11 @@ void MyMesh::Render(matrix4 a_mProjection, matrix4 a_mView, matrix4 a_mModel)
 	//Final Projection of the Camera
 	matrix4 m4MVP = a_mProjection * a_mView * a_mModel;
 	glUniformMatrix4fv(MVP, 1, GL_FALSE, glm::value_ptr(m4MVP));
-	
+
 	//Solid
 	glUniform3f(wire, -1.0f, -1.0f, -1.0f);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	glDrawArrays(GL_TRIANGLES, 0, m_uVertexCount);  
+	glDrawArrays(GL_TRIANGLES, 0, m_uVertexCount);
 
 	//Wire
 	glUniform3f(wire, 1.0f, 0.0f, 1.0f);
