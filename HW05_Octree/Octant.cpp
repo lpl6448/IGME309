@@ -24,16 +24,24 @@ Octant::Octant(uint a_nMaxLevel, uint a_nIdealEntityCount)
 	//want in it, remember each subdivision will create 8 children for this octant but not all children
 	//of those children will have children of their own
 
-	//The following is a made-up size, you need to make sure it is measuring all the object boxes in the world
+	// By creating a RigidBody with the minimum and maximum ARBBs for each box as vertices,
+	// the resulting RigidBody encloses all objects in the root octant.
 	std::vector<vector3> lMinMax;
-	lMinMax.push_back(vector3(-50.0f));
-	lMinMax.push_back(vector3(25.0f));
+	uint entityCount = m_pEntityMngr->GetEntityCount();
+	for (uint i = 0; i < entityCount; i++)
+	{
+		RigidBody* rb = m_pEntityMngr->GetRigidBody(i);
+		lMinMax.push_back(rb->GetMinGlobal());
+		lMinMax.push_back(rb->GetMaxGlobal());
+
+		m_EntityList.push_back(i);
+	}
 	RigidBody pRigidBody = RigidBody(lMinMax);
 
 
 	//The following will set up the values of the octant, make sure the are right, the rigid body at start
 	//is NOT fine, it has made-up values
-	m_fSize = pRigidBody.GetHalfWidth().x * 2.0f;
+	m_fSize = glm::compMax(pRigidBody.GetHalfWidth()) * 2.0f;
 	m_v3Center = pRigidBody.GetCenterLocal();
 	m_v3Min = m_v3Center - pRigidBody.GetHalfWidth();
 	m_v3Max = m_v3Center + pRigidBody.GetHalfWidth();
@@ -45,21 +53,45 @@ Octant::Octant(uint a_nMaxLevel, uint a_nIdealEntityCount)
 bool Octant::IsColliding(uint a_uRBIndex)
 {
 	//Get how many objects there are in the world
+	uint entityCount = m_pEntityMngr->GetEntityCount();
+
 	//If the index given is larger than the number of elements in the bounding object there is no collision
+	if (a_uRBIndex >= entityCount)
+		return false;
+
 	//As the Octree will never rotate or scale this collision is as easy as an Axis Alligned Bounding Box
 	//Get all vectors in global space (the octant ones are already in Global)
-	return true; // for the sake of startup code
+	RigidBody* rb = m_pEntityMngr->GetRigidBody(a_uRBIndex);
+	return glm::all(glm::lessThanEqual(rb->GetMinGlobal(), m_v3Max))
+		&& glm::all(glm::lessThanEqual(m_v3Min, rb->GetMaxGlobal()));
 }
 void Octant::Display(uint a_nIndex, vector3 a_v3Color)
 {
-	// Display the specified octant
+	if (m_uID == a_nIndex) // This is the requested octant, so render it
+		m_pModelMngr->AddWireCubeToRenderList(glm::translate(IDENTITY_M4, m_v3Center) *
+			glm::scale(vector3(m_fSize)), a_v3Color);
+	else if (!IsLeaf()) // Search recursively through this octant's children for the octant with the given ID
+		for (int i = 0; i < 8; i++)
+			GetChild(i)->Display(a_nIndex, a_v3Color);
 }
 void Octant::Display(vector3 a_v3Color)
 {
 	//this is meant to be a recursive method, in starter code will only display the root
 	//even if other objects are created
-	m_pModelMngr->AddWireCubeToRenderList(glm::translate(IDENTITY_M4, m_v3Center) *
-		glm::scale(vector3(m_fSize)), a_v3Color);
+	if (IsLeaf())
+	{
+		// Only render leaves
+		m_pModelMngr->AddWireCubeToRenderList(glm::translate(IDENTITY_M4, m_v3Center) *
+			glm::scale(vector3(m_fSize)), a_v3Color);
+	}
+	else
+	{
+		// Recursively render child octants
+		for (int i = 0; i < 8; i++)
+			GetChild(i)->Display(a_v3Color);
+		// The way that the octree subdivides, displaying all 8 children of a node will ultimately also form the outline for this node,
+		// so there's no need to display the node unless it is a leaf.
+	}
 }
 void Octant::Subdivide(void)
 {
@@ -72,18 +104,63 @@ void Octant::Subdivide(void)
 		return;
 
 	//Subdivide the space and allocate 8 children
+	m_uChildren = 8;
+	float childSize = m_fSize / 2;
+	m_pChild[0] = new Octant(m_v3Center + vector3(-1, -1, -1) * childSize / 2, childSize);
+	m_pChild[1] = new Octant(m_v3Center + vector3(-1, -1, 1) * childSize / 2, childSize);
+	m_pChild[2] = new Octant(m_v3Center + vector3(-1, 1, -1) * childSize / 2, childSize);
+	m_pChild[3] = new Octant(m_v3Center + vector3(-1, 1, 1) * childSize / 2, childSize);
+	m_pChild[4] = new Octant(m_v3Center + vector3(1, -1, -1) * childSize / 2, childSize);
+	m_pChild[5] = new Octant(m_v3Center + vector3(1, -1, 1) * childSize / 2, childSize);
+	m_pChild[6] = new Octant(m_v3Center + vector3(1, 1, -1) * childSize / 2, childSize);
+	m_pChild[7] = new Octant(m_v3Center + vector3(1, 1, 1) * childSize / 2, childSize);
+	// Initialize each new octant
+	for (int i = 0; i < 8; i++)
+	{
+		Octant* octant = m_pChild[i];
+		octant->m_uLevel = m_uLevel + 1;
+		octant->m_pRoot = m_pRoot;
+		octant->m_pParent = this;
+
+		// Recursively subdivide until there are not many entities in the octant
+		if (octant->ContainsAtLeast(m_uIdealEntityCount))
+			octant->Subdivide();
+	}
 }
 bool Octant::ContainsAtLeast(uint a_nEntities)
 {
-	//You need to check how many entity objects live within this octant
-	return false; //return something for the sake of start up code
+	// Count the number of entities colliding with this octant
+	uint entityCount = m_pEntityMngr->GetEntityCount();
+	uint collidingCount = 0;
+	for (uint i = 0; i < entityCount; i++)
+		if (IsColliding(i))
+			collidingCount++;
+	return collidingCount > a_nEntities;
 }
 void Octant::AssignIDtoEntity(void)
 {
 	//Recursive method
 	//Have to traverse the tree and make sure to tell the entity manager
 	//what octant (space) each object is at
-	m_pEntityMngr->AddDimension(0, m_uID);//example only, take the first entity and tell it its on this space
+
+	// Get all entities in this octant
+	uint entityCount = m_pEntityMngr->GetEntityCount();
+	for (uint i = 0; i < entityCount; i++)
+		if (IsColliding(i))
+			m_EntityList.push_back(i);
+
+	if (IsLeaf())
+	{
+		// If this node has no children, its entities should be added to the entity manager dimension list
+		for (int entityIndex : m_EntityList)
+			m_pEntityMngr->AddDimension(entityIndex, m_uID);
+	}
+	else
+	{
+		// If this node has children, the child nodes should be processed
+		for (int i = 0; i < 8; i++)
+			GetChild(i)->AssignIDtoEntity();
+	}
 }
 //-------------------------------------------------------------------------------------------------------------------
 // You can assume the following is fine and does not need changes, you may add onto it but the code is fine as is
